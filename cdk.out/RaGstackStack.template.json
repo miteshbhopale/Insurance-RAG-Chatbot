@@ -241,7 +241,7 @@
      }
     ],
     "SourceObjectKeys": [
-     "7a3fadd84fb0d4d57465ee1d5c9c8f8ca0824abbe690030b2e06783343e5108e.zip"
+     "9f85ccc8ef670eb2936791a9a792cdd6b9b870e62858ddf26b0a5861a97e311b.zip"
     ],
     "DestinationBucketName": {
      "Ref": "MyStaticSiteBucket0830CFE7"

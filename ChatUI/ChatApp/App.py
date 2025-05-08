@@ -9,18 +9,18 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_history_aware_retriever
 from langchain_community.vectorstores import FAISS
 import boto3
-from langchain_aws import BedrockLLM as Bedrock
+from langchain_aws import ChatBedrock
+from langchain_aws import BedrockLLM
 from langchain_community.embeddings import BedrockEmbeddings
 from pathlib import Path
-from styles import STYLES, BANNER, TYPING
-import logging
-from botocore.exceptions import ClientError
+from styles import STYLES,BANNER,TYPING
 
 st.set_page_config(page_title="IVA Bot", page_icon="🤖")
 st.markdown(STYLES, unsafe_allow_html=True)
 
 # Top banner with bot logo and status
 st.markdown(BANNER, unsafe_allow_html=True)
+
 
 # Prompt
 template = """Use the following pieces of context to answer the question at the end. Please follow the following rules:
@@ -31,7 +31,7 @@ Question: {input}
 Helpful Answer:"""
 
 BUCKET_NAME = "rag-bot-source-834215301031-us-east-1"
-file_path = "/tmp"
+file_path = f"/tmp"
 
 # Initialize AWS connectors
 bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
@@ -43,54 +43,48 @@ prompt = PromptTemplate(
 )
 
 # Method to use the foundational LLM model via bedrock
-def get_llama2_llm():
-    llm = Bedrock(model_id="meta.llama2-13b-chat-v1", client=bedrock,
-                  model_kwargs={'max_gen_len': 512})
+def get_llm():
+    # For Claude models, we need to use ChatBedrock
+    # Claude options:
+    # - "anthropic.claude-3-sonnet-20240229-v1:0"
+    # - "anthropic.claude-3-haiku-20240307-v1:0"
+    llm = ChatBedrock(
+        model_id="anthropic.claude-3-sonnet-20240229-v1:0", 
+        client=bedrock,
+        model_kwargs={'max_tokens': 512}
+    )
+    
+    # For non-Claude models, use BedrockLLM:
+    # llm = BedrockLLM(
+    #     model_id="amazon.titan-text-express-v1", 
+    #     client=bedrock,
+    #     model_kwargs={'maxTokenCount': 512}
+    # )
+    
     return llm
 
-llm = get_llama2_llm()
+llm = get_llm()
 
 bedrock_embeddings = BedrockEmbeddings(model_id="amazon.titan-embed-text-v1", client=bedrock)
 
 # Method to download vectors of the policy document from S3
 def download_vectors(policy_number):
-    s3_vector_faiss_key = f'vectors/policydoc/{policy_number}/policydoc_faiss.faiss'
-    s3_vector_pkl_key = f'vectors/policydoc/{policy_number}/policydoc_pkl.pkl'
+    s3_vector_faiss_key = 'vectors/policydoc/' + policy_number + '/' + 'policydoc_faiss.faiss'
+    s3_vector_pkl_key = 'vectors/policydoc/' + policy_number + '/' + 'policydoc_pkl.pkl'
     Path(file_path).mkdir(parents=True, exist_ok=True)
-    
-    try:
-        # Check if files exist in S3 before attempting download
-        s3.head_object(Bucket=BUCKET_NAME, Key=s3_vector_faiss_key)
-        s3.head_object(Bucket=BUCKET_NAME, Key=s3_vector_pkl_key)
-        
-        # Download files
-        s3.download_file(Bucket=BUCKET_NAME, Key=s3_vector_faiss_key, Filename=f"{file_path}/my_faiss.faiss")
-        s3.download_file(Bucket=BUCKET_NAME, Key=s3_vector_pkl_key, Filename=f"{file_path}/my_faiss.pkl")
-        return True
-    except ClientError as e:
-        if e.response['Error']['Code'] == '404':
-            st.error(f"Error: Vector files for policy {policy_number} not found in S3.")
-            logging.error(f"S3 file not found: {e}")
-        else:
-            st.error(f"Error downloading vector files: {e}")
-            logging.error(f"S3 download error: {e}")
-        return False
+    s3.download_file(Bucket=BUCKET_NAME, Key=s3_vector_faiss_key, Filename=f"{file_path}/my_faiss.faiss")
+    s3.download_file(Bucket=BUCKET_NAME, Key=s3_vector_pkl_key, Filename=f"{file_path}/my_faiss.pkl")
    
 # Method to load the vector indexes
 def load_faiss_index():
-    try:
-        faiss_index = FAISS.load_local(index_name="my_faiss", folder_path=file_path, embeddings=bedrock_embeddings, allow_dangerous_deserialization=True)
-        retriever = faiss_index.as_retriever()
-        document_chain = create_stuff_documents_chain(llm, prompt)
-        retriever_chain = create_history_aware_retriever(llm, retriever, prompt)
-        chain = create_retrieval_chain(retriever_chain, document_chain)
-        return chain
-    except Exception as e:
-        st.error(f"Error loading FAISS index: {e}")
-        logging.error(f"FAISS loading error: {e}")
-        return None
+    faiss_index = FAISS.load_local(index_name="my_faiss", folder_path=file_path, embeddings=bedrock_embeddings, allow_dangerous_deserialization=True)
+    retriever = faiss_index.as_retriever()
+    document_chain = create_stuff_documents_chain(llm, prompt)
+    retriever_chain = create_history_aware_retriever(llm, retriever, prompt)
+    chain = create_retrieval_chain(retriever_chain, document_chain)
+    return chain
 
-# Methods to retrieve chat responses as stream
+# Methods to retreive chat responses as stream
 def get_response(query, chain):
     return chain.stream({"input": query})
 
@@ -131,7 +125,7 @@ if "awaiting_response" not in st.session_state:
 
 # Handle user input based on policy validation
 if not st.session_state.policy_id_validated:
-    prompt_ = st.chat_input("Enter your policy number(e.g., AU1234):")
+    prompt_ = st.chat_input("Enter your policy number(e.g., AU1234789):")
 else:
     prompt_ = st.chat_input("Type your message here")
 
@@ -139,7 +133,7 @@ if prompt_:
     # Display user message in chat message container
     st.session_state.chat_history.append(HumanMessage(content=prompt_))
     st.session_state.awaiting_response = True
-    st.rerun()  # Updated from experimental_rerun
+    st.rerun()
 
 # Handle the response after user input
 if st.session_state.awaiting_response:
@@ -151,30 +145,19 @@ if st.session_state.awaiting_response:
     user_input = st.session_state.chat_history[-1].content
     if not st.session_state.policy_id_validated:
         if validate_policy_id(user_input):
-            download_success = download_vectors(user_input)
-            if download_success:
-                # Load FAISS index and setup chain after vectors are downloaded
-                chain = load_faiss_index()
-                if chain:
-                    st.session_state.chain = chain
-                    response = "Policy number validated successfully. How can I help about your policy today?"
-                    st.session_state.policy_id_validated = True
-                else:
-                    response = "Unable to load policy information. Please try again or contact support."
-            else:
-                response = f"Policy {user_input} could not be found in our system. Please check the number and try again."
+            download_vectors(user_input)
+            # Load FAISS index and setup chain after vectors are downloaded
+            st.session_state.chain = load_faiss_index()
+            response = "Policy number validated successfully. How can I help about your policy today?"
+            st.session_state.policy_id_validated = True
         else:
-            response = "Incorrect policy number format. Please enter a valid policy number (e.g., AU1234)."
+            response = "Incorrect policy number. Please enter a valid policy"
     else:
         # Get response from chain
-        try:
-            response = get_streamed_response(user_input, st.session_state.chain)
-        except Exception as e:
-            response = f"I'm sorry, I encountered an error processing your request: {str(e)}"
-            logging.error(f"Error getting response: {e}")
+        response = get_streamed_response(user_input, st.session_state.chain)
 
     # Add the response to chat history
     st.session_state.chat_history.append(AIMessage(content=response))
     st.session_state.awaiting_response = False
     typing_indicator.empty()
-    st.rerun()  # Updated from experimental_rerun
+    st.rerun()
