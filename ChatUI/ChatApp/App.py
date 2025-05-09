@@ -115,9 +115,9 @@ for message in st.session_state.chat_history:
         </div>
     """, unsafe_allow_html=True)
 
-# Method to validate the policy
+# Method to validate the policy - MODIFIED TO ACCEPT ANY NUMBER OF DIGITS
 def validate_policy_id(policy_id):
-    return bool(re.match(r'^AU\d{4}$', policy_id))
+    return bool(re.match(r'^AU\d+$', policy_id))
 
 # Handle user input
 if "awaiting_response" not in st.session_state:
@@ -145,13 +145,16 @@ if st.session_state.awaiting_response:
     user_input = st.session_state.chat_history[-1].content
     if not st.session_state.policy_id_validated:
         if validate_policy_id(user_input):
-            download_vectors(user_input)
-            # Load FAISS index and setup chain after vectors are downloaded
-            st.session_state.chain = load_faiss_index()
-            response = "Policy number validated successfully. How can I help about your policy today?"
-            st.session_state.policy_id_validated = True
+            try:
+                download_vectors(user_input)
+                # Load FAISS index and setup chain after vectors are downloaded
+                st.session_state.chain = load_faiss_index()
+                response = "Policy number validated successfully. How can I help about your policy today?"
+                st.session_state.policy_id_validated = True
+            except Exception as e:
+                response = f"Policy number format is valid, but I couldn't find policy data for {user_input}. Please check your policy number and try again."
         else:
-            response = "Incorrect policy number. Please enter a valid policy"
+            response = "Incorrect policy number. Please enter a valid policy number starting with 'AU' followed by digits."
     else:
         # Get response from chain
         response = get_streamed_response(user_input, st.session_state.chain)
