@@ -15,7 +15,7 @@ from langchain_community.embeddings import BedrockEmbeddings
 from pathlib import Path
 from styles import STYLES,BANNER,TYPING
 
-st.set_page_config(page_title="IVA Bot", page_icon="🤖")
+st.set_page_config(page_title="OIPA Bot", page_icon="🤖")
 st.markdown(STYLES, unsafe_allow_html=True)
 
 # Top banner with bot logo and status
@@ -98,7 +98,7 @@ def get_streamed_response(prompt, chain):
 # Initialize chat history
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
-        AIMessage(content="Hello! I'm IVA, your virtual assistant"),
+        AIMessage(content="Hello! I'm OIPA Bot, your virtual assistant"),
     ]
     time.sleep(2)
     st.session_state.chat_history.append(AIMessage(content="Please enter your policy number to get started"))

@@ -91,7 +91,7 @@ BANNER="""
     <div class="st-emotion-cache-18ni7ap top-banner">
         <div>
             <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQG1JzTwTj8b1jzq2zKlBbLEf3i-rOLwnmZqQ&usqp=CAU" alt="Bot Logo">
-            <span>IVA Bot</span>
+            <span>OIPA Bot</span>
         </div>
         <div class="status-indicator">
             <div class="green-dot"></div>
